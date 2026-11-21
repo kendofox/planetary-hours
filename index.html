@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1b1a2e">
+<title>行星時辰計算器</title>
+<style>
+:root{--bg:#14131f;--card:#1f1d2e;--line:#34314a;--tx:#ece9f5;--sub:#a9a4c2;--gold:#e6c46b;--hi:#2e5d43;}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--tx);font-family:"Noto Sans TC","PingFang TC","Microsoft JhengHei",sans-serif;font-size:16px;line-height:1.5;padding:16px 14px 40px}
+h1{font-size:22px;margin:4px 0 2px;color:var(--gold);letter-spacing:2px}
+.sub{color:var(--sub);font-size:13px;margin-bottom:14px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px;margin-bottom:12px}
+label{display:block;font-size:13px;color:var(--sub);margin-bottom:4px}
+input,select{width:100%;font-size:16px;padding:10px;border-radius:10px;border:1px solid var(--line);background:#12111c;color:var(--tx)}
+.row{display:flex;gap:8px}.row>*{flex:1}
+.btns{display:flex;gap:8px;margin-top:10px}
+button{flex:1;font-size:15px;padding:10px 4px;border-radius:10px;border:1px solid var(--line);background:#2a2840;color:var(--tx)}
+button.pri{background:var(--gold);color:#1b1a2e;font-weight:700;border-color:var(--gold)}
+button.on{background:#3d3a5c;border-color:var(--gold)}
+#custom{display:none;margin-top:10px}
+.head{font-size:18px;font-weight:700;margin-bottom:8px}
+.props{display:grid;grid-template-columns:1fr 1fr;gap:6px 12px;font-size:14px}
+.props b{color:var(--gold);font-weight:600}
+.now{margin-top:10px;padding:10px;border-radius:10px;background:var(--hi);font-weight:600}
+table{width:100%;border-collapse:collapse;font-size:15px}
+td,th{padding:8px 4px;border-bottom:1px solid var(--line);text-align:left}
+th{color:var(--sub);font-weight:500;font-size:13px}
+tr.cur td{background:var(--hi)}
+.sym{font-family:"Segoe UI Symbol","Apple Symbols","Noto Sans Symbols","DejaVu Sans",sans-serif;color:var(--gold);font-size:18px;width:1.4em;display:inline-block}
+.n{color:var(--sub);font-size:13px}
+.tag{font-size:12px;color:var(--sub)}
+.note{font-size:13px;color:var(--sub)}
+.note li{margin-bottom:4px}
+</style>
+</head>
+<body>
+<h1>行星時辰計算器</h1>
+<div class="sub">日出到隔天日出的 24 個行星時辰，顯示當地時間，離線可用。</div>
+
+<div class="card">
+  <div class="row">
+    <div><label>日期</label><input type="date" id="date"></div>
+    <div><label>地點</label><select id="city"></select></div>
+  </div>
+  <div id="custom">
+    <div class="row">
+      <div><label>緯度（北為正）</label><input id="lat" inputmode="decimal" value="25.033"></div>
+      <div><label>經度（東為正）</label><input id="lon" inputmode="decimal" value="121.565"></div>
+      <div><label>時區（UTC+）</label><input id="tz" inputmode="decimal" value="8"></div>
+    </div>
+    <div class="btns"><button id="geo">用手機目前位置</button></div>
+  </div>
+  <div class="btns">
+    <button id="prev">前一天</button>
+    <button id="today" class="pri">今天</button>
+    <button id="next">後一天</button>
+  </div>
+</div>
+
+<div class="card" id="info"></div>
+
+<div class="card">
+  <div class="btns" style="margin-top:0;margin-bottom:8px">
+    <button data-v="all" class="vb on">全部</button>
+    <button data-v="day" class="vb">白天</button>
+    <button data-v="night" class="vb">夜間</button>
+  </div>
+  <table><thead><tr><th>序</th><th>行星</th><th>開始</th><th>結束</th></tr></thead><tbody id="tb"></tbody></table>
+</div>
+
+<div class="card note">
+  <ol style="margin:0;padding-left:20px">
+    <li>白天從日出到日落平分 12 份，夜間從日落到隔天日出平分 12 份，所以時辰長度隨季節變化。</li>
+    <li>每天日出的第一個時辰屬當天守護星：日太陽、一月亮、二火星、三水星、四木星、五金星、六土星。</li>
+    <li>之後依迦勒底序循環：土星、木星、火星、太陽、金星、水星、月亮。</li>
+    <li>日出日落用天文公式估算，跟氣象局公布值通常差一分鐘以內。</li>
+    <li>倫敦、紐約用冬令時間；夏令期間請選「自訂」並把時區加一。</li>
+  </ol>
+</div>
+
+<script>
+var R=Math.PI/180;
+var ORDER=["土星","木星","火星","太陽","金星","水星","月亮"];
+var SYM={"土星":"♄","木星":"♃","火星":"♂","太陽":"☉","金星":"♀","水星":"☿","月亮":"☽"};
+var RULER=["太陽","月亮","火星","水星","木星","金星","土星"];
+var WEEK=["日","一","二","三","四","五","六"];
+var CITIES=[["臺北",25.033,121.565,8],["臺中",24.148,120.674,8],["臺南",22.999,120.227,8],["高雄",22.627,120.301,8],["花蓮",23.991,121.611,8],["香港",22.319,114.169,8],["上海",31.230,121.474,8],["東京",35.676,139.650,9],["曼谷",13.756,100.502,7],["杜拜",25.205,55.271,4],["阿布達比",24.454,54.377,4],["倫敦（冬令）",51.507,-0.128,0],["紐約（冬令）",40.713,-74.006,-5],["自訂",null,null,null]];
+var view="all";
+var $=function(id){return document.getElementById(id)};
+CITIES.forEach(function(c,i){var o=document.createElement("option");o.value=i;o.textContent=c[0];$("city").appendChild(o)});
+try{var saved=localStorage.getItem("ph_city");if(saved!==null)$("city").value=saved;["lat","lon","tz"].forEach(function(k){var v=localStorage.getItem("ph_"+k);if(v!==null)$(k).value=v});}catch(e){}
+
+function sun(y,m,d,lat,lon){
+  var jd=Date.UTC(y,m-1,d)/864e5+2440587.5;
+  var n=Math.ceil(jd-2451545+0.0008);
+  var js=n-lon/360;
+  var M=((357.5291+0.98560028*js)%360+360)%360;
+  var C=1.9148*Math.sin(M*R)+0.02*Math.sin(2*M*R)+0.0003*Math.sin(3*M*R);
+  var L=(M+C+180+102.9372)%360;
+  var jt=2451545+js+0.0053*Math.sin(M*R)-0.0069*Math.sin(2*L*R);
+  var sd=Math.sin(L*R)*Math.sin(23.4397*R);
+  var cd=Math.cos(Math.asin(sd));
+  var cw=(Math.sin(-0.833*R)-Math.sin(lat*R)*sd)/(Math.cos(lat*R)*cd);
+  if(cw<-1||cw>1)return null;
+  var w=Math.acos(cw)/R;
+  var t=function(J){return (J-2440587.5)*864e5};
+  return [t(jt-w/360),t(jt+w/360)];
+}
+function hm(ms,tz){var t=new Date(ms+tz*36e5);return ("0"+t.getUTCHours()).slice(-2)+":"+("0"+t.getUTCMinutes()).slice(-2)}
+function loc(){
+  var c=CITIES[+$("city").value];
+  if(c[1]===null)return {lat:parseFloat($("lat").value),lon:parseFloat($("lon").value),tz:parseFloat($("tz").value)};
+  return {lat:c[1],lon:c[2],tz:c[3]};
+}
+function todayIn(tz){return new Date(Date.now()+tz*36e5).toISOString().slice(0,10)}
+function shift(s,k){var p=s.split("-").map(Number);return new Date(Date.UTC(p[0],p[1]-1,p[2])+k*864e5).toISOString().slice(0,10)}
+
+function render(){
+  var custom=CITIES[+$("city").value][1]===null;
+  $("custom").style.display=custom?"block":"none";
+  try{localStorage.setItem("ph_city",$("city").value);["lat","lon","tz"].forEach(function(k){localStorage.setItem("ph_"+k,$(k).value)});}catch(e){}
+  var L=loc();
+  var p=($("date").value||"").split("-").map(Number);
+  if(p.length!==3||isNaN(L.lat)||isNaN(L.lon)||isNaN(L.tz)){$("info").innerHTML="請確認日期和經緯度。";$("tb").innerHTML="";return}
+  var a=sun(p[0],p[1],p[2],L.lat,L.lon);
+  var nd=new Date(Date.UTC(p[0],p[1]-1,p[2])+864e5);
+  var b=sun(nd.getUTCFullYear(),nd.getUTCMonth()+1,nd.getUTCDate(),L.lat,L.lon);
+  if(!a||!b){$("info").innerHTML="這天這個地點是永晝或永夜，算不出行星時辰。";$("tb").innerHTML="";return}
+  var wd=new Date(Date.UTC(p[0],p[1]-1,p[2])).getUTCDay();
+  var ruler=RULER[wd],st=ORDER.indexOf(ruler);
+  var dl=(a[1]-a[0])/12,nl=(b[0]-a[1])/12,now=Date.now(),cur=null,rows="";
+  for(var h=0;h<24;h++){
+    var s=h<12?a[0]+dl*h:a[1]+nl*(h-12),e=s+(h<12?dl:nl),pl=ORDER[(st+h)%7],isc=now>=s&&now<e;
+    if(isc)cur={pl:pl,s:s,e:e};
+    var part=h<12?"day":"night";
+    if(view!=="all"&&view!==part)continue;
+    rows+='<tr'+(isc?' class="cur"':'')+'><td class="n">'+(h+1)+'<br><span class="tag">'+(h<12?"白":"夜")+'</span></td><td><span class="sym">'+SYM[pl]+'</span>'+pl+(isc?"（現在）":"")+'</td><td>'+hm(s,L.tz)+'</td><td>'+hm(e,L.tz)+'</td></tr>';
+  }
+  $("tb").innerHTML=rows;
+  $("info").innerHTML='<div class="head">週'+WEEK[wd]+'，日主 <span class="sym">'+SYM[ruler]+'</span>'+ruler+'</div>'+
+   '<div class="props"><div>日出 <b>'+hm(a[0],L.tz)+'</b></div><div>日落 <b>'+hm(a[1],L.tz)+'</b></div><div>隔天日出 <b>'+hm(b[0],L.tz)+'</b></div><div></div>'+
+   '<div>白天時辰 <b>'+(dl/6e4).toFixed(1)+'</b> 分</div><div>夜間時辰 <b>'+(nl/6e4).toFixed(1)+'</b> 分</div></div>'+
+   (cur?'<div class="now">現在正在走 <span class="sym">'+SYM[cur.pl]+'</span>'+cur.pl+'時辰，'+hm(cur.s,L.tz)+' 到 '+hm(cur.e,L.tz)+'</div>':'');
+}
+$("date").value=todayIn(loc().tz);
+// before sunrise, today's planetary day is still yesterday's
+(function(){var L=loc(),p=$("date").value.split("-").map(Number),a=sun(p[0],p[1],p[2],L.lat,L.lon);if(a&&Date.now()<a[0])$("date").value=shift($("date").value,-1);})();
+["date","city","lat","lon","tz"].forEach(function(k){$(k).addEventListener("input",render);$(k).addEventListener("change",render)});
+$("prev").onclick=function(){$("date").value=shift($("date").value,-1);render()};
+$("next").onclick=function(){$("date").value=shift($("date").value,1);render()};
+$("today").onclick=function(){$("date").value=todayIn(loc().tz);render()};
+document.querySelectorAll(".vb").forEach(function(btn){btn.onclick=function(){view=btn.getAttribute("data-v");document.querySelectorAll(".vb").forEach(function(x){x.classList.toggle("on",x===btn)});render()}});
+$("geo").onclick=function(){
+  if(!navigator.geolocation){alert("這個瀏覽器不支援定位");return}
+  navigator.geolocation.getCurrentPosition(function(pos){$("lat").value=pos.coords.latitude.toFixed(3);$("lon").value=pos.coords.longitude.toFixed(3);$("tz").value=String(-new Date().getTimezoneOffset()/60);render()},function(){alert("定位失敗，請手動輸入經緯度")});
+};
+render();
+setInterval(render,60000);
+</script>
+</body>
+</html>
